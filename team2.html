@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>強いチーム - 報告ツール</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- アイコンコンポーネント定義 (lucide-reactの代わり) ---
+        const IconBase = ({ children, className, ...props }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="24" height="24" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className} 
+                {...props}
+            >
+                {children}
+            </svg>
+        );
+
+        const Users = (props) => <IconBase {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>;
+        const Heart = (props) => <IconBase {...props}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></IconBase>;
+        const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>;
+        const MessageSquare = (props) => <IconBase {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></IconBase>;
+        const Target = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></IconBase>;
+        const AlertCircle = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconBase>;
+        const Send = (props) => <IconBase {...props}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></IconBase>;
+        const Clipboard = (props) => <IconBase {...props}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
+        const Trash2 = (props) => <IconBase {...props}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>;
+        const CheckCircle2 = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></IconBase>;
+
+        // --- メインアプリケーション ---
+        const App = () => {
+          const [userName, setUserName] = useState('');
+          const [selectedActions, setSelectedActions] = useState({
+            gratitude: { active: false, comment: '', label: '感謝・称賛の言葉をチーム内で発信する' },
+            challenge: { active: false, comment: '', label: '挑戦と改善を日常化する' },
+            sharing: { active: false, comment: '', label: '報連相を徹底し情報を共有する' },
+            purpose: { active: false, comment: '', label: '目的を意識した行動をする' },
+          });
+          const [troubles, setTroubles] = useState('');
+          const [history, setHistory] = useState([]);
+          const [showToast, setShowToast] = useState(false);
+
+          // フォームのリセット
+          const resetForm = () => {
+            setSelectedActions({
+              gratitude: { active: false, comment: '', label: '感謝・称賛の言葉をチーム内で発信する' },
+              challenge: { active: false, comment: '', label: '挑戦と改善を日常化する' },
+              sharing: { active: false, comment: '', label: '報連相を徹底し情報を共有する' },
+              purpose: { active: false, comment: '', label: '目的を意識した行動をする' },
+            });
+            setTroubles('');
+          };
+
+          // 送信処理
+          const handleSubmit = (e) => {
+            e.preventDefault();
+            if (!userName) {
+              alert("お名前を入力してください");
+              return;
+            }
+
+            const activeActions = Object.entries(selectedActions)
+              .filter(([_, val]) => val.active)
+              .map(([key, val]) => ({ type: key, label: val.label, comment: val.comment }));
+
+            if (activeActions.length === 0 && !troubles) {
+              alert("項目を選択するか、困っていることを入力してください");
+              return;
+            }
+
+            const newEntry = {
+              id: Date.now(),
+              name: userName,
+              date: new Date().toLocaleString('ja-JP'),
+              actions: activeActions,
+              troubles: troubles
+            };
+
+            setHistory([newEntry, ...history]);
+            resetForm();
+            triggerToast();
+          };
+
+          const triggerToast = () => {
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+          };
+
+          const handleToggleAction = (key) => {
+            setSelectedActions(prev => ({
+              ...prev,
+              [key]: { ...prev[key], active: !prev[key].active }
+            }));
+          };
+
+          const handleCommentChange = (key, value) => {
+            setSelectedActions(prev => ({
+              ...prev,
+              [key]: { ...prev[key], comment: value }
+            }));
+          };
+
+          const copyToClipboard = (entry) => {
+            let text = `【強いチーム 報告】\n名前: ${entry.name}\n日時: ${entry.date}\n\n`;
+            entry.actions.forEach(a => {
+              text += `■ ${a.label}\nコメント: ${a.comment || '（なし）'}\n`;
+            });
+            if (entry.troubles) {
+              text += `\n■ 現在、困っていること\n${entry.troubles}\n`;
+            }
+            
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert("クリップボードにコピーしました！チャット等に貼り付けてください。");
+          };
+
+          const deleteHistory = (id) => {
+            setHistory(history.filter(h => h.id !== id));
+          };
+
+          const icons = {
+            gratitude: <Heart className="text-pink-500" />,
+            challenge: <Zap className="text-yellow-500" />,
+            sharing: <MessageSquare className="text-blue-500" />,
+            purpose: <Target className="text-purple-500" />
+          };
+
+          return (
+            <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800">
+              <div className="max-w-2xl mx-auto">
+                {/* Header */}
+                <header className="flex items-center gap-3 mb-8">
+                  <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
+                    <Users className="text-white w-8 h-8" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">強いチーム</h1>
+                    <p className="text-sm text-slate-500">ポジティブな共有と課題解決</p>
+                  </div>
+                </header>
+
+                {/* Input Form */}
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 mb-8 overflow-hidden relative">
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">お名前</label>
+                      <input
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        placeholder="例：山田 太郎"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="block text-sm font-semibold text-slate-700">あてはまる項目を選択してコメント</label>
+                      
+                      {Object.entries(selectedActions).map(([key, item]) => (
+                        <div 
+                          key={key} 
+                          className={`border rounded-2xl p-4 transition-all duration-200 ${item.active ? 'border-blue-500 bg-blue-50/30' : 'border-slate-100 bg-slate-50/50'}`}
+                        >
+                          <div 
+                            className="flex items-center gap-3 cursor-pointer select-none"
+                            onClick={() => handleToggleAction(key)}
+                          >
+                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${item.active ? 'bg-blue-500 border-blue-500' : 'border-slate-300'}`}>
+                              {item.active && <CheckCircle2 className="w-4 h-4 text-white" />}
+                            </div>
+                            <span className="flex-1 flex items-center gap-2 font-medium text-slate-700">
+                              {icons[key]}
+                              {item.label}
+                            </span>
+                          </div>
+                          
+                          {item.active && (
+                            <div className="mt-3 pl-9">
+                              <textarea
+                                value={item.comment}
+                                onChange={(e) => handleCommentChange(key, e.target.value)}
+                                placeholder="具体的なエピソードを記入..."
+                                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-200 outline-none h-24 text-sm resize-none"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100">
+                      <label className="flex items-center gap-2 text-sm font-semibold text-red-600 mb-2">
+                        <AlertCircle className="w-4 h-4" />
+                        現在、困っていること
+                      </label>
+                      <textarea
+                        value={troubles}
+                        onChange={(e) => setTroubles(e.target.value)}
+                        placeholder="サポートが必要なこと、改善したい課題など..."
+                        className="w-full p-4 rounded-xl border border-red-100 bg-red-50/30 focus:ring-2 focus:ring-red-200 outline-none h-32 text-sm resize-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 active:scale-[0.98]"
+                    >
+                      <Send className="w-5 h-5" />
+                      入力を完了する
+                    </button>
+                  </form>
+                </div>
+
+                {/* History Section */}
+                {history.length > 0 && (
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 px-1">
+                      最近の入力履歴
+                      <span className="text-xs bg-slate-200 px-2 py-1 rounded-full text-slate-600">{history.length}</span>
+                    </h2>
+                    
+                    {history.map((item) => (
+                      <div key={item.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-bold text-slate-900">{item.name}</h3>
+                            <p className="text-xs text-slate-400">{item.date}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => copyToClipboard(item)}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="内容をコピー"
+                            >
+                              <Clipboard className="w-5 h-5" />
+                            </button>
+                            <button 
+                              onClick={() => deleteHistory(item.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="削除"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {item.actions.map((act, idx) => (
+                            <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                              <p className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
+                                {icons[act.type]}
+                                {act.label}
+                              </p>
+                              <p className="text-sm text-slate-700 leading-relaxed">{act.comment || "（コメントなし）"}</p>
+                            </div>
+                          ))}
+                          
+                          {item.troubles && (
+                            <div className="bg-red-50 rounded-xl p-3 border border-red-100">
+                              <p className="text-xs font-bold text-red-600 mb-1 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" />
+                                現在、困っていること
+                              </p>
+                              <p className="text-sm text-slate-700 leading-relaxed">{item.troubles}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Success Toast */}
+                {showToast && (
+                  <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-bounce">
+                    <CheckCircle2 className="text-green-400 w-5 h-5" />
+                    <span className="font-medium">保存しました！コピーして共有しましょう。</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
